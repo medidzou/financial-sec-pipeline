@@ -30,3 +30,15 @@ INSERT INTO assets (symbol, name, asset_type) VALUES
 ('MSFT', 'Microsoft Corporation', 'stock'),
 ('BTC-USD', 'Bitcoin USD', 'crypto')
 ON CONFLICT (symbol) DO NOTHING;
+
+
+
+CREATE TABLE IF NOT EXISTS indicators (
+    id BIGSERIAL PRIMARY KEY,
+    asset_id INT REFERENCES assets(id) ON DELETE CASCADE,
+    price_date DATE NOT NULL,
+    daily_return NUMERIC(10, 4),
+    volatility NUMERIC(10, 4),
+    moving_avg NUMERIC(12, 4),
+    UNIQUE(asset_id, price_date)
+);
