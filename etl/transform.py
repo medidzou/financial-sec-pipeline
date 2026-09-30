@@ -25,8 +25,8 @@ def clean_data(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 def validate_data(df):
-    mask = (df["close_price"] > 0) & (df["high_price"] > 0) & (df["low_price"] > 0) & (df["open_price"] > 0)
-    return df[mask]
+    mask = (df["close_price"] > 0) & (df["high_price"] > 0) & (df["low_price"] > 0) & (df["open_price"] > 0) & (df["high_price"] >= df["low_price"]))
+    return df[mask].reset_index(drop=True)
 
 def compute_indicators(df: pd.DataFrame, window: int = 5) -> pd.DataFrame:
     """
@@ -59,9 +59,9 @@ def compute_indicators(df: pd.DataFrame, window: int = 5) -> pd.DataFrame:
 if __name__ == "__main__":
     from extract import fetch_market_data, SYMBOLS
 
-    raw_data = fetch_market_data(SYMBOLS, period="1mo")
     cleaned = clean_data(raw_data)
-    enriched = compute_indicators(cleaned)
+    validated = validate_data(cleaned)
+    enriched = compute_indicators(validated)
 
     print(enriched[
         ["symbol", "price_date", "close_price", "daily_return", "volatility", "moving_avg"]
