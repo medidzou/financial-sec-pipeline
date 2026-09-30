@@ -25,7 +25,7 @@ def clean_data(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 def validate_data(df):
-    mask = (df["close_price"] > 0) & (df["high_price"] > 0) & (df["low_price"] > 0) & (df["open_price"] > 0) & (df["high_price"] >= df["low_price"]))
+    mask = (df["close_price"] > 0) & (df["high_price"] > 0) & (df["low_price"] > 0) & (df["open_price"] > 0) & (df["high_price"] >= df["low_price"])
     return df[mask].reset_index(drop=True)
 
 def compute_indicators(df: pd.DataFrame, window: int = 5) -> pd.DataFrame:
