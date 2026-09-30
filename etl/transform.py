@@ -5,7 +5,7 @@ par actif (symbol).
 """
 
 import pandas as pd
-
+from datetime import date
 
 def clean_data(df: pd.DataFrame) -> pd.DataFrame:
     """
@@ -25,7 +25,24 @@ def clean_data(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 def validate_data(df):
-    mask = (df["close_price"] > 0) & (df["high_price"] > 0) & (df["low_price"] > 0) & (df["open_price"] > 0) & (df["high_price"] >= df["low_price"])
+    mask = (
+        # 1. Prix strictement positifs
+        (df["close_price"] > 0)
+        & (df["open_price"] > 0)
+        & (df["high_price"] > 0)
+        & (df["low_price"] > 0)
+        # 2. Cohérence du chandelier (High au sommet, Low à la base)
+        & (df["high_price"] >= df["low_price"])
+        & (df["high_price"] >= df["open_price"])
+        & (df["high_price"] >= df["close_price"])
+        & (df["low_price"] <= df["open_price"])
+        & (df["low_price"] <= df["close_price"])
+        # 3. Volume positif ou nul
+        & (df["volume"] >= 0)
+        # 4. Temporalité et périmètre
+        & (dates <= today)
+        & (df["symbol"].isin(SYMBOLS))
+    )
     return df[mask].reset_index(drop=True)
 
 def compute_indicators(df: pd.DataFrame, window: int = 5) -> pd.DataFrame:
