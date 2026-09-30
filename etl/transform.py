@@ -24,6 +24,9 @@ def clean_data(df: pd.DataFrame) -> pd.DataFrame:
 
     return df
 
+def validate_data(df):
+    df = df[df["close_price"] > 0]
+    return df
 
 def compute_indicators(df: pd.DataFrame, window: int = 5) -> pd.DataFrame:
     """
@@ -51,8 +54,7 @@ def compute_indicators(df: pd.DataFrame, window: int = 5) -> pd.DataFrame:
         .reset_index(level=0, drop=True)
     )
 
-    return df
-
+    return df 
 
 if __name__ == "__main__":
     from extract import fetch_market_data, SYMBOLS
