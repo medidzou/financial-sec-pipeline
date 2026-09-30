@@ -97,10 +97,15 @@ def load_indicators(conn, df):
 
 if __name__ == "__main__":
     from extract import fetch_market_data, SYMBOLS
-    from transform import clean_data, compute_indicators
+    from transform import clean_data, compute_indicators, validate_data
 
     raw_data = fetch_market_data(SYMBOLS, period="1mo")
     cleaned = clean_data(raw_data)
+    clean_df, rejected_df = validate_data(cleaned)
+    if not rejected_df.empty:
+           print(
+               f"[!] ATTENTION : {len(rejected_df)} ligne(s) rejetée(s) par les contrôles qualité."
+           )
     enriched = compute_indicators(cleaned)
 
     conn = get_connection()
