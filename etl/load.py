@@ -33,7 +33,20 @@ def get_or_create_asset_id(cur, symbol: str) -> int:
         (symbol, symbol, "unknown"),
     )
     return cur.fetchone()[0]
-
+    
+def log_audit(conn, action: str, status: str, details: str):
+    """
+    Enregistre un événement dans la table audit_logs pour la traçabilité.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO audit_logs (user_action, details, status)
+            VALUES (%s, %s, %s)
+            """,
+            (action, details, status),
+        )
+    conn.commit()
 
 def load_prices(conn, df):
     with conn.cursor() as cur:
@@ -102,16 +115,26 @@ if __name__ == "__main__":
     raw_data = fetch_market_data(SYMBOLS, period="1mo")
     cleaned = clean_data(raw_data)
     clean_df, rejected_df = validate_data(cleaned)
-    if not rejected_df.empty:
-           print(
-               f"[!] ATTENTION : {len(rejected_df)} ligne(s) rejetée(s) par les contrôles qualité."
-           )
-    enriched = compute_indicators(cleaned)
-
+   
     conn = get_connection()
     try:
+        if not rejected_df.empty:
+            msg = f"{len(rejected_df)} ligne(s) rejetée(s) : symboles = {rejected_df['symbol'].unique().tolist()}"
+            print(f"[!] ATTENTION : {msg}")
+            log_audit(conn, "DATA_VALIDATION", "WARNING", msg)
+
+        enriched = compute_indicators(clean_df)
         load_prices(conn, enriched)
         load_indicators(conn, enriched)
+        log_audit(
+            conn,
+            "ETL_PIPELINE",
+            "SUCCESS",
+            f"Ingestion terminée : {len(clean_df)} lignes saines insérées.",
+        )
+    except Exception as e:
+        log_audit(conn, "ETL_PIPELINE", "FAILURE", f"Erreur critique : {str(e)}")
+        raise e
     finally:
         conn.close()
 
