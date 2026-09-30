@@ -43,6 +43,8 @@ def validate_data(df):
         & (dates <= today)
         & (df["symbol"].isin(SYMBOLS))
     )
+    clean_df = df[mask].reset_index(drop=True)
+    rejected_df = df[~mask].reset_index(drop=True)
     return df[mask].reset_index(drop=True)
 
 def compute_indicators(df: pd.DataFrame, window: int = 5) -> pd.DataFrame:
