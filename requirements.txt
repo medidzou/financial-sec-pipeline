@@ -33,3 +33,5 @@ webencodings==0.5.1
 websockets==15.0.1
 yfinance==1.2.0
 pytest==8.4.2
+streamlit==1.64.0
+plotly==7.1.0
