@@ -1,16 +1,19 @@
-"""
-Script de transformation : nettoie les données brutes issues de extract.py
+"""Script de transformation : nettoie les données brutes issues de extract.py
+
 et calcule les indicateurs financiers (rendement, volatilité, moyenne mobile)
 par actif (symbol).
 """
 
+from datetime import datetime, timezone
 import pandas as pd
-from datetime import date
+from extract import SYMBOLS
+
 
 def clean_data(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Nettoie le DataFrame : supprime doublons, trie par actif puis par date.
-    """
+    """Nettoie le DataFrame : supprime doublons, trie par actif puis par date."""
+    if df.empty:
+        return df
+
     df = df.drop_duplicates(subset=["symbol", "price_date"])
     df = df.sort_values(["symbol", "price_date"]).reset_index(drop=True)
 
@@ -24,7 +27,25 @@ def clean_data(df: pd.DataFrame) -> pd.DataFrame:
 
     return df
 
-def validate_data(df):
+
+def validate_data(
+    df: pd.DataFrame, allowed_symbols: list[str] = SYMBOLS
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Contrôles Data Quality stricts :
+
+    - Prix strictement positifs
+    - Cohérence OHLC
+    - Volume positif ou nul
+    - Date <= aujourd'hui (UTC)
+    - Symbole faisant partie du référentiel autorisé
+    """
+    if df.empty:
+        return df, pd.DataFrame()
+
+    df = df.copy()
+    dates = pd.to_datetime(df["price_date"]).dt.date
+    today = datetime.now(timezone.utc).date()
+
     mask = (
         # 1. Prix strictement positifs
         (df["close_price"] > 0)
@@ -41,20 +62,19 @@ def validate_data(df):
         & (df["volume"] >= 0)
         # 4. Temporalité et périmètre
         & (dates <= today)
-        & (df["symbol"].isin(SYMBOLS))
+        & (df["symbol"].isin(allowed_symbols))
     )
+
     clean_df = df[mask].reset_index(drop=True)
     rejected_df = df[~mask].reset_index(drop=True)
     return clean_df, rejected_df
 
+
 def compute_indicators(df: pd.DataFrame, window: int = 5) -> pd.DataFrame:
-    """
-    Ajoute les colonnes d'indicateurs financiers, calculées séparément
-    pour chaque actif (symbol) :
-    - daily_return : rendement journalier en %
-    - volatility   : écart-type glissant du rendement (sur `window` jours)
-    - moving_avg   : moyenne mobile du prix de clôture (sur `window` jours)
-    """
+    """Ajoute les colonnes d'indicateurs financiers calculées par actif (symbol)."""
+    if df.empty:
+        return df
+
     df = df.copy()
 
     df["daily_return"] = df.groupby("symbol")["close_price"].pct_change() * 100
@@ -73,15 +93,31 @@ def compute_indicators(df: pd.DataFrame, window: int = 5) -> pd.DataFrame:
         .reset_index(level=0, drop=True)
     )
 
-    return df 
+    return df
+
 
 if __name__ == "__main__":
-    from extract import fetch_market_data, SYMBOLS
+    from extract import fetch_market_data
 
+    raw_data = fetch_market_data(SYMBOLS, period="1mo")
     cleaned = clean_data(raw_data)
-    validated = validate_data(cleaned)
-    enriched = compute_indicators(validated)
+    clean_df, rejected_df = validate_data(cleaned)
+    enriched = compute_indicators(clean_df)
 
-    print(enriched[
-        ["symbol", "price_date", "close_price", "daily_return", "volatility", "moving_avg"]
-    ].groupby("symbol").tail(5))
+    if not rejected_df.empty:
+        print(f"[!] Lignes rejetées : {len(rejected_df)}")
+
+    print(
+        enriched[
+            [
+                "symbol",
+                "price_date",
+                "close_price",
+                "daily_return",
+                "volatility",
+                "moving_avg",
+            ]
+        ]
+        .groupby("symbol")
+        .tail(5)
+    )
