@@ -9,18 +9,18 @@ from dotenv import load_dotenv
 # --- Configuration de la page Streamlit ---
 st.set_page_config(
     page_title="Financial & Cyber Data Pipeline",
-    page_icon="📈",
+    page_icon="",
     layout="wide"
 )
 
 # Chargement des variables d'environnement
 load_dotenv()
 
-DB_USER = os.getenv("DB_USER", "secfin_user")
-DB_PASSWORD = os.getenv("DB_PASSWORD", "")
-DB_HOST = os.getenv("DB_HOST", "localhost")
-DB_PORT = os.getenv("DB_PORT", "5432")
-DB_NAME = os.getenv("DB_NAME", "secfin_db")
+DB_USER = os.getenv("POSTGRES_USER", "secfin_user")
+DB_PASSWORD = os.getenv("POSTGRES_PASSWORD", "")
+DB_HOST = os.getenv("POSTGRES_HOST", "localhost")
+DB_PORT = os.getenv("POSTGRES_PORT", "5432")
+DB_NAME = os.getenv("POSTGRES_DB", "secfin_db")
 
 DATABASE_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 
@@ -70,7 +70,7 @@ def load_audit_logs(limit: int = 50):
 
 
 # --- Interface Utilisateur ---
-st.title("🛡️ Financial & Cyber Data Dashboard")
+st.title("Financial & Cyber Data Dashboard")
 
 # Récupération de la liste des actifs
 assets_df = load_assets()
@@ -80,7 +80,7 @@ if assets_df.empty:
     st.stop()
 
 # Barre latérale : Filtres
-st.sidebar.header("⚙️ Filtres & Sélection")
+st.sidebar.header("Filtres & Sélection")
 
 symbol_list = assets_df["symbol"].tolist()
 selected_symbol = st.sidebar.selectbox("Sélectionner un actif", symbol_list)
@@ -115,15 +115,15 @@ else:
     filtered_df = pd.DataFrame()
 
 # Bouton de rafraîchissement
-if st.sidebar.button("🔄 Actualiser les données"):
+if st.sidebar.button("Actualiser les données"):
     st.cache_data.clear()
     st.rerun()
 
 # --- Onglets Principaux ---
 tab_market, tab_indicators, tab_audit = st.tabs([
-    "📊 Analyse de Marché", 
-    "📉 Indicateurs & Risque", 
-    "🔍 Qualité de Données & Audit"
+    "Analyse de Marché", 
+    "Indicateurs & Risque", 
+    "Qualité de Données & Audit"
 ])
 
 # ==========================================
