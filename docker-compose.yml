@@ -5,8 +5,66 @@ services:
     restart: always
     env_file:
       - .env
-    ports:
-      - "5432:5432"
+    environment:
+      DASHBOARD_DB_USER: ${DASHBOARD_DB_USER:-secfin_dashboard}
+      DASHBOARD_DB_PASSWORD: ${DASHBOARD_DB_PASSWORD:?Définissez DASHBOARD_DB_PASSWORD dans .env}
+      ETL_DB_USER: ${ETL_DB_USER:?Définissez ETL_DB_USER dans .env}
+      ETL_DB_PASSWORD: ${ETL_DB_PASSWORD:?Définissez ETL_DB_PASSWORD dans .env}
+    expose:
+      - "5432"
     volumes:
       - ./postgres_data:/var/lib/postgresql/data
       - ./sql/init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile.dashboard
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      POSTGRES_USER: ${DASHBOARD_DB_USER:-secfin_dashboard}
+      POSTGRES_PASSWORD: ${DASHBOARD_DB_PASSWORD:?Définissez DASHBOARD_DB_PASSWORD dans .env}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+    ports:
+      - "8501:8501"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  airflow:
+    build:
+      context: .
+      dockerfile: Dockerfile.airflow
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      AIRFLOW__CORE__EXECUTOR: SequentialExecutor
+      AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "False"
+      AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "False"
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: sqlite:////tmp/airflow.db
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: ${ETL_DB_USER:?Définissez ETL_DB_USER dans .env}
+      POSTGRES_PASSWORD: ${ETL_DB_PASSWORD:?Définissez ETL_DB_PASSWORD dans .env}
+    command: standalone
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - airflow_logs_data:/opt/airflow/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  airflow_logs_data:

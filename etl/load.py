@@ -108,34 +108,45 @@ def load_indicators(conn, df):
     print(f"{len(df)} lignes d'indicateurs insérées/mises à jour.")
 
 
-if __name__ == "__main__":
-    from extract import fetch_market_data, SYMBOLS
-    from transform import clean_data, compute_indicators, validate_data
-
-    raw_data = fetch_market_data(SYMBOLS, period="1mo")
-    cleaned = clean_data(raw_data)
-    clean_df, rejected_df = validate_data(cleaned)
-   
+def persist_pipeline_results(clean_df, enriched_df, rejected_df):
     conn = get_connection()
     try:
         if not rejected_df.empty:
-            msg = f"{len(rejected_df)} ligne(s) rejetée(s) : symboles = {rejected_df['symbol'].unique().tolist()}"
-            print(f"[!] ATTENTION : {msg}")
-            log_audit(conn, "DATA_VALIDATION", "WARNING", msg)
+            details = f"{len(rejected_df)} ligne(s) rejetée(s) par les contrôles Data Quality."
+            print(f"[!] ATTENTION : {details}")
+            log_audit(conn, "DATA_VALIDATION", "WARNING", details)
 
-        enriched = compute_indicators(clean_df)
-        load_prices(conn, enriched)
-        load_indicators(conn, enriched)
+        load_prices(conn, clean_df)
+        load_indicators(conn, enriched_df)
         log_audit(
             conn,
             "ETL_PIPELINE",
             "SUCCESS",
             f"Ingestion terminée : {len(clean_df)} lignes saines insérées.",
         )
-    except Exception as e:
-        log_audit(conn, "ETL_PIPELINE", "FAILURE", f"Erreur critique : {str(e)}")
-        raise e
+    except Exception:
+        try:
+            conn.rollback()
+            log_audit(
+                conn,
+                "ETL_PIPELINE",
+                "FAILURE",
+                "Échec du chargement ; consulter les logs d'exécution protégés.",
+            )
+        except Exception:
+            conn.rollback()
+        raise
     finally:
         conn.close()
 
+
+if __name__ == "__main__":
+    from etl.extract import SYMBOLS, fetch_market_data
+    from etl.transform import clean_data, compute_indicators, validate_data
+
+    raw_data = fetch_market_data(SYMBOLS, period="5d")
+    cleaned = clean_data(raw_data)
+    clean_df, rejected_df = validate_data(cleaned)
+    enriched_df = compute_indicators(clean_df)
+    persist_pipeline_results(clean_df, enriched_df, rejected_df)
     print("Pipeline ETL terminé avec succès.")

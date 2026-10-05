@@ -1,10 +1,17 @@
 import os
+import sys
+
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from sqlalchemy import create_engine, text
-from dotenv import load_dotenv
+from sqlalchemy import text
+from security.auth import ROLE_AUDITOR, authenticate
+from security.database import create_database_engine
 
 # --- Configuration de la page Streamlit ---
 st.set_page_config(
@@ -13,21 +20,10 @@ st.set_page_config(
     layout="wide"
 )
 
-# Chargement des variables d'environnement
-load_dotenv()
-
-DB_USER = os.getenv("POSTGRES_USER", "secfin_user")
-DB_PASSWORD = os.getenv("POSTGRES_PASSWORD", "")
-DB_HOST = os.getenv("POSTGRES_HOST", "localhost")
-DB_PORT = os.getenv("POSTGRES_PORT", "5432")
-DB_NAME = os.getenv("POSTGRES_DB", "secfin_db")
-
-DATABASE_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
-
 # --- Connexion BDD avec Cache Streamlit ---
 @st.cache_resource
 def get_database_engine():
-    return create_engine(DATABASE_URL)
+    return create_database_engine()
 
 @st.cache_data(ttl=60)
 def load_assets():
@@ -57,8 +53,9 @@ def load_financial_data(asset_id: int):
     """)
     return pd.read_sql(query, engine, params={"asset_id": asset_id})
 
-@st.cache_data(ttl=30)
-def load_audit_logs(limit: int = 50):
+def load_audit_logs(user_role: str, limit: int = 50):
+    if user_role != ROLE_AUDITOR:
+        raise PermissionError("Le rôle Auditeur est requis pour consulter les journaux.")
     engine = get_database_engine()
     query = text("""
         SELECT id, timestamp, user_action, status, details 
@@ -67,6 +64,44 @@ def load_audit_logs(limit: int = 50):
         LIMIT :limit;
     """)
     return pd.read_sql(query, engine, params={"limit": limit})
+
+
+try:
+    database_engine = get_database_engine()
+except (RuntimeError, ValueError) as error:
+    st.error(str(error))
+    st.stop()
+
+if "authenticated_user" not in st.session_state:
+    st.title("Connexion au dashboard financier")
+    with st.form("login_form"):
+        username = st.text_input("Identifiant")
+        password = st.text_input("Mot de passe", type="password")
+        submitted = st.form_submit_button("Se connecter")
+
+    if submitted:
+        try:
+            user = authenticate(database_engine, username, password)
+        except Exception:
+            st.error("Connexion impossible. Vérifiez la base de données et réessayez.")
+            st.stop()
+        if user:
+            st.session_state["authenticated_user"] = user
+            st.rerun()
+        st.error("Identifiant ou mot de passe incorrect, ou compte temporairement verrouillé.")
+    st.stop()
+
+authenticated_user = st.session_state["authenticated_user"]
+user_role = authenticated_user["role"]
+if user_role not in {"analyst", ROLE_AUDITOR}:
+    st.session_state.pop("authenticated_user", None)
+    st.error("Rôle utilisateur invalide.")
+    st.stop()
+
+st.sidebar.caption(f"Connecté : {authenticated_user['username']} ({user_role})")
+if st.sidebar.button("Se déconnecter"):
+    st.session_state.pop("authenticated_user", None)
+    st.rerun()
 
 
 # --- Interface Utilisateur ---
@@ -120,11 +155,12 @@ if st.sidebar.button("Actualiser les données"):
     st.rerun()
 
 # --- Onglets Principaux ---
-tab_market, tab_indicators, tab_audit = st.tabs([
-    "Analyse de Marché", 
-    "Indicateurs & Risque", 
-    "Qualité de Données & Audit"
-])
+tab_labels = ["Analyse de Marché", "Indicateurs & Risque"]
+if user_role == ROLE_AUDITOR:
+    tab_labels.append("Qualité de Données & Audit")
+dashboard_tabs = st.tabs(tab_labels)
+tab_market, tab_indicators = dashboard_tabs[:2]
+tab_audit = dashboard_tabs[2] if user_role == ROLE_AUDITOR else None
 
 # ==========================================
 # Onglet 1 : Marché (Chandelier + Moyenne Mobile + Volume)
@@ -253,30 +289,29 @@ with tab_indicators:
 # ==========================================
 # Onglet 3 : Qualité des données & Audit Logs
 # ==========================================
-with tab_audit:
-    st.subheader("Traçabilité du Pipeline ETL (`audit_logs`)")
-    
-    logs_df = load_audit_logs()
-    
-    if logs_df.empty:
-        st.info("Aucun log d'audit enregistré.")
-    else:
-        # Résumé des statuts
-        counts = logs_df["status"].value_counts().to_dict()
-        col_a1, col_a2, col_a3 = st.columns(3)
-        col_a1.metric("Succès", counts.get("SUCCESS", 0))
-        col_a2.metric("Avertissements", counts.get("WARNING", 0))
-        col_a3.metric("Échecs", counts.get("FAILURE", 0))
+if tab_audit is not None:
+    with tab_audit:
+        st.subheader("Traçabilité du Pipeline ETL (`audit_logs`)")
 
-        # Coloration dynamique selon le statut
-        def color_status(val):
-            if val == "SUCCESS":
-                return "color: #00CC96; font-weight: bold;"
-            elif val == "WARNING":
-                return "color: #FFA15A; font-weight: bold;"
-            elif val == "FAILURE":
-                return "color: #EF553B; font-weight: bold;"
-            return ""
+        logs_df = load_audit_logs(user_role)
 
-        styled_logs = logs_df.style.map(color_status, subset=["status"])
-        st.dataframe(styled_logs, use_container_width=True, hide_index=True)
+        if logs_df.empty:
+            st.info("Aucun log d'audit enregistré.")
+        else:
+            counts = logs_df["status"].value_counts().to_dict()
+            col_a1, col_a2, col_a3 = st.columns(3)
+            col_a1.metric("Succès", counts.get("SUCCESS", 0))
+            col_a2.metric("Avertissements", counts.get("WARNING", 0))
+            col_a3.metric("Échecs", counts.get("FAILURE", 0))
+
+            def color_status(val):
+                if val == "SUCCESS":
+                    return "color: #00CC96; font-weight: bold;"
+                if val == "WARNING":
+                    return "color: #FFA15A; font-weight: bold;"
+                if val == "FAILURE":
+                    return "color: #EF553B; font-weight: bold;"
+                return ""
+
+            styled_logs = logs_df.style.map(color_status, subset=["status"])
+            st.dataframe(styled_logs, use_container_width=True, hide_index=True)

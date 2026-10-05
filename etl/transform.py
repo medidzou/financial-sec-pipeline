@@ -6,7 +6,7 @@ par actif (symbol).
 
 from datetime import datetime, timezone
 import pandas as pd
-from extract import SYMBOLS
+from etl.extract import SYMBOLS
 
 
 def clean_data(df: pd.DataFrame) -> pd.DataFrame:
@@ -97,7 +97,7 @@ def compute_indicators(df: pd.DataFrame, window: int = 5) -> pd.DataFrame:
 
 
 if __name__ == "__main__":
-    from extract import fetch_market_data
+    from etl.extract import fetch_market_data
 
     raw_data = fetch_market_data(SYMBOLS, period="1mo")
     cleaned = clean_data(raw_data)
