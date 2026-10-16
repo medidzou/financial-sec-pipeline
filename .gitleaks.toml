@@ -1,0 +1,16 @@
+title = "Gitleaks Configuration"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Ignore test files and test fixtures"
+paths = [
+    '''(^|/)tests/.*'''
+]
+
+[[allowlists]]
+description = "Ignore test files and test fixtures (v8.25+ format)"
+paths = [
+    '''(^|/)tests/.*'''
+]

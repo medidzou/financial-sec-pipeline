@@ -5,7 +5,7 @@ from security.database import create_database_engine
 
 
 def test_password_hash_is_salted_and_verifiable():
-    password = "Lk9!Xv7#Qm2$Pz5"
+    password = "TestUserPassword2026!"
 
     first_hash = hash_password(password)
     second_hash = hash_password(password)
@@ -25,7 +25,7 @@ def test_username_is_normalized():
 
 
 def test_database_url_preserves_reserved_password_characters(monkeypatch):
-    password = "R7!dM2@pX4#qL8$"
+    password = "Database@Password/With:Symbols#"
     monkeypatch.setenv("POSTGRES_PASSWORD", password)
     monkeypatch.setenv("POSTGRES_USER", "secfin_user")
     monkeypatch.setenv("POSTGRES_HOST", "localhost")
