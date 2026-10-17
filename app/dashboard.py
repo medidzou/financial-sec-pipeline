@@ -74,6 +74,11 @@ except (RuntimeError, ValueError) as error:
 
 if "authenticated_user" not in st.session_state:
     st.title("Connexion au dashboard financier")
+    st.info(
+        "💡 **Comptes de Démonstration (Évaluation Recruteurs & Jury)** :\n"
+        "- **Profil Analyste** : Identifiant `mehdi` | Mot de passe `Insa2026!Analyst` (Accès graphiques de marché & indicateurs de risque)\n"
+        "- **Profil Auditeur** : Identifiant `auditeur` | Mot de passe `Insa2026!Auditor` (Accès exclusif à la traçabilité & logs d'audit RGPD)"
+    )
     with st.form("login_form"):
         username = st.text_input("Identifiant")
         password = st.text_input("Mot de passe", type="password")
